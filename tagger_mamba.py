@@ -333,6 +333,25 @@ class GetEntities(TaggingRequest):
 		else:
 			mamba.http.HTTPResponse(self, data, "text/plain").send()
 
+class GetEntitiesBatch(TaggingRequest):
+
+        def __init__(self, http, action = "GetEntities"):
+                TaggingRequest.__init__(self, http, action)
+
+        def parse(self, rest):
+                TaggingRequest.parse(self, rest)
+                self.format = "xml"
+                if "format" in rest:
+                        self.format = rest["format"].lower()
+                if self.format not in ("xml", "tsv", "csv", "ssv"):
+                        raise mamba.task.SyntaxError, 'In action: %s unknown format: "%s". Supports only: %s' % (self.action, format, ', '.join(supported_formats))
+
+        def tagging(self):
+                data = mamba.setup.config().tagger.get_entities_batch(document=mamba.util.string_to_bytes(self.document, self.http.charset), document_id=self.document_id, entity_types=self.entity_types, auto_detect=self.auto_detect, ignore_blacklist=self.ignore_blacklist, format=self.format)
+                if format == "xml":
+                        mamba.http.HTTPResponse(self, data, "text/xml").send()
+                else:
+                        mamba.http.HTTPResponse(self, data, "text/plain").send()
 
 class GetHTML(TaggingRequest):
 
@@ -382,10 +401,10 @@ class GetURI(GetHTML):
 
 
 class Extract(TaggingRequest):
-	
+
 	def __init__(self, http, action = "Extract"):
 		TaggingRequest.__init__(self, http, action)
-	
+
 	def tagging(self):
 		dictionary = blackmamba.database.Connect("dictionary")
 		document = mamba.util.string_to_bytes(self.document, self.http.charset)
