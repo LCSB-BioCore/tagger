@@ -1,4 +1,3 @@
-import datetime
 import hashlib
 import json
 import os
@@ -7,6 +6,8 @@ import sys
 import threading
 import xml.sax.saxutils
 from collections import defaultdict
+
+import datetime
 
 PY3 = sys.version_info >= (3,)
 
@@ -213,10 +214,11 @@ class Tagger:
             format = "xml"
         format = format.lower()
         matches = self.get_matches(document, document_id, entity_types, auto_detect, allow_overlap, protect_tags,
-                                   max_tokens, tokenize_characters, ignore_blacklist)
+                                   max_tokens, tokenize_characters, ignore_blacklist, utf8_coordinates=True)
         doc = []
         if format == "xml":
             uniq = {}
+            document = unicode(document, 'utf-8')
             for match in matches:
                 if match[2] is not None:
                     text = document[match[0]:match[1] + 1]
@@ -233,6 +235,8 @@ class Tagger:
                 doc.append('<item>')
                 doc.append('<name xsi:type="xsd:string">%s</name>' % xml.sax.saxutils.escape(text))
                 doc.append('<count xsi:type="xsd:int">%i</count>' % len(matches))
+                doc.append('<start xsi:type="xsd:int">%i</start>' % match[0])
+                doc.append('<end xsi:type="xsd:int">%i</end>' % match[1])
                 doc.append('<entities>')
                 for entity_type, entity_identifier in match[2]:
                     doc.append('<entity>')
@@ -287,8 +291,7 @@ class Tagger:
                            format='xml'):
         lines_for_pubmed_id = defaultdict(list)
         texts_for_pubmed_id = defaultdict(list)
-        sep = "\t"
-
+        document = unicode(document, 'utf-8')
         pubmed_ids = set()
         lines = document.split("\n")
         for line in lines[:-1]:
@@ -300,22 +303,23 @@ class Tagger:
         all_docs = defaultdict(lambda: '')
 
         for pubmed_id in pubmed_ids:
-            single_document = ""
-            single_document_full = ""
-            sep = "\t"
+            single_document = u""
+            single_document_full = u""
             for index, entry in enumerate(lines_for_pubmed_id[pubmed_id]):
-                single_document_full = single_document_full + entry + "\n"
-                single_document = single_document + texts_for_pubmed_id[pubmed_id][index] + "\n"
+                single_document_full = single_document_full + entry + u"\n"
+                single_document = single_document + texts_for_pubmed_id[pubmed_id][index] + u"\n"
 
-            all_new_line_chars = [(a.start()) for a in list(re.finditer('\n', single_document))]
+            all_new_line_chars = [(a.start()) for a in list(re.finditer(u'\n', single_document))]
             start_stop_lines = [(-1, all_new_line_chars[0])]
             for index, entry in enumerate(all_new_line_chars):
                 if index < len(all_new_line_chars) - 1:
                     start_stop_lines.append((entry, all_new_line_chars[index + 1]))
 
             format = format.lower()
-            matches = self.get_matches(single_document, document_id, entity_types, auto_detect, allow_overlap,
-                                       protect_tags, max_tokens, tokenize_characters, ignore_blacklist)
+            single_document_str = single_document.encode('utf-8')
+            matches = self.get_matches(single_document_str, document_id, entity_types, auto_detect, allow_overlap,
+                                       protect_tags, max_tokens, tokenize_characters, ignore_blacklist,
+                                       utf8_coordinates=True)
             doc = []
 
             uniq = {}
@@ -350,15 +354,16 @@ class Tagger:
                 if sep in identifier:
                     identifier = '"' + identifier + '"'
                 doc.append(str(serial_match) + sep + str(pubmed_id) + sep + str(local_data) + sep + str(
-                    sentence_type) + sep + str(start) + sep + str(end) + sep + text + sep + str(
+                    sentence_type) + sep + str(start) + sep + str(end) + sep + str(text) + sep + str(
                     type) + sep + identifier)
 
             all_docs[pubmed_id] = doc
 
-        new_doc_string = ""
+        new_doc = []
         for id_ in all_docs:
             for line in all_docs[id_]:
-                new_doc_string = new_doc_string + line + "\n"
+                new_doc.append(line)
+        new_doc_string = "\n".join(new_doc)
         return new_doc_string
 
     def create_html(self, document, document_id, matches, basename='tagger', add_events=False, extra_classes=False,
